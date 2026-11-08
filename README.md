@@ -1,54 +1,61 @@
 # dsh-plugin-search
 
-[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+搜索和抓取各一个开关，逻辑相同：**开 = 插件，关 = DeepSeek**。
 
-不用官方 DeepSeek API，`web_search` 不再 401。
+- 搜索开：屏蔽 DeepSeek 搜索，给 magpie 的 Chat Completions 加上 `web_search_options: {}`
+- 抓取开：屏蔽 DeepSeek 抓取，本机 HTTP 直连，和 Claude Code 的 WebFetch 一样
 
-默认零配置。装上就把内置 `web-search-deepseek` 关掉，工具名还是 `web_search`。
+设置卡在 **插件页本包**，和 `dsh-rewind-plugin` 一样。保存后立刻生效。
 
-对应：[Discussions #779](https://github.com/deepseek-ai/deepseek-harness/discussions/779) · [#408](https://github.com/deepseek-ai/deepseek-harness/discussions/408) · 介绍帖：[Show and tell #1715](https://github.com/deepseek-ai/deepseek-harness/discussions/1715)
+`inject: [web]` 是 Cordis 服务 `ctx.web`，Desktop 和 Web 都能装。装到你正在跑的 profile。
 
 ## 安装
 
+这台 DSH Desktop 用 `desktop` profile：
+
 ```powershell
-dsh plugin --profile web add github:shinjiyu/dsh-plugin-search
+dsh plugin --profile desktop add C:\Users\Fan\Desktop\dsh-plugin-search
 ```
 
-然后**重启** `dsh web`。旧会话的工具表不会更新。
+`dsh web` 则用 `--profile web`。装完重启，打开 **插件 → dsh-plugin-search**。
 
-## 配置
+## 设置卡
 
-可以不配。没 key 走 Tavily keyless。
+| 开关 | 关 | 开 |
+|---|---|---|
+| 搜索 | `deepseek-search-api` | `web_search_options`（屏蔽 DeepSeek 搜索，隐藏 DSH 的 `web_search` 工具） |
+| 抓取 | `deepseek-fetch-api` | `http` 本机直连（屏蔽 DeepSeek 抓取） |
 
-有账号再设：
+开搜索时 pin `searchProvider: simple-search`，该 provider 的 `ready()` 为 false，所以 `dsh-tool-web` 不会把函数工具 `web_search` 交给模型。关搜索时 pin `deepseek-search-api`，并且不再往请求里写 `web_search_options`。
 
+保存时同时写入本插件 config 和 `web` 行的 `searchProvider` / `fetchProvider`。patch 整段替换，两字段必须一起在。
+
+默认 pin：
+
+```yaml
+- id: web
+  config:
+    searchProvider: simple-search
+    fetchProvider: http
+- id: web-search-deepseek
+  disabled: true
 ```
-TAVILY_API_KEY=tvly-...
+
+`web-deepseek-api` 保持加载，两个开关关掉时才能回到 DeepSeek。默认 pin 插件侧，所以不会出现 `deepseek-fetch-api, http` 双 provider 报错。
+
+要整包屏蔽 DeepSeek Fetch，再加：
+
+```yaml
+- id: web-deepseek-api
+  disabled: true
 ```
 
-不要把 key 写进仓库。
-
-## 30 秒验收
-
-1. 主模型用 GLM / 网关 / 任何非官方 DeepSeek  
-2. 不要设 `DEEPSEEK_API_KEY`  
-3. 问「今天 DeepSeek Harness 最新 Discussions 说了什么」  
-4. 过关：`web_search` 能出链接，不再红字 401  
+这时抓取开关的 DeepSeek 一侧会变成“已配置但未注册”。
 
 ## 不要做
 
-- 不要改 `runtime/` 或官方 `web-search-deepseek`  
-- 不要把它宣传成搜索引擎全家桶  
-
-## 社区
-
-微信群：**deepseek harness 交流群**
-
-![微信群二维码](docs/community/wechat-group.png)
-
-微信群码大约 7 天过期（本张到 **2026-08-22**）。
-
-宣发稿在 [`docs/PROMO.md`](docs/PROMO.md)。
+- 不要只改 `searchProvider` 不写 `fetchProvider`
+- 不要再依赖 `TAVILY_API_KEY`
 
 ## License
 

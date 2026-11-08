@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-search",
-  "version": "0.1.0",
-  "description": "Zero-config web_search for DeepSeek Harness when you are not on the official DeepSeek API.",
+  "version": "0.1.1",
+  "description": "Switch web_search and web_fetch between DeepSeek and this plugin. Works on desktop and web profiles.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,11 +10,20 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./client": "./dist/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
     }
   },
   "files": [
@@ -27,9 +36,9 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.json && tsc -p tsconfig.test.json && node --test dist-test/*.test.js",
-    "prepare": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json && node scripts/copy-client.mjs",
+    "test": "npm run build && tsc -p tsconfig.test.json && node --test dist-test/*.test.js",
+    "prepare": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -45,6 +54,14 @@
     "web-search"
   ],
   "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "^3.18.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^24.2.0",
     "typescript": "^5.9.2"

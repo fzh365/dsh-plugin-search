@@ -1,11 +1,31 @@
-# Keep the model-facing web_search tool. Point it at this provider.
-# Turn off the shipped DeepSeek search so a missing official key no longer 401s.
+# inject: [web] is the ctx.web SERVICE, not the "web" profile.
+# Install into the profile you actually run:
+#   dsh plugin --profile desktop add <this>
+#   dsh plugin --profile web add <this>
+#
+# Search switch on the plugin settings card:
+#   ON  searchBackend: plugin   → OpenAI web_search_options; pin simple-search
+#       with ready()=false so DSH withholds web_search and DeepSeek search is unused
+#   OFF searchBackend: deepseek → searchProvider deepseek-search-api
+# Fetch switch is the same shape, independent of search:
+#   ON  fetchBackend: plugin   → fetchProvider http (Claude Code WebFetch)
+#   OFF fetchBackend: deepseek → fetchProvider deepseek-fetch-api
+#
+# web-deepseek-api stays loaded so DeepSeek search/fetch remain selectable.
+# web-search-deepseek (Messages search) is off.
+
 - insert:
     - id: dsh-plugin-search
       name: dsh-plugin-search
       inject: [web]
+      config:
+        searchBackend: plugin
+        fetchBackend: plugin
+
 - id: web
   config:
     searchProvider: simple-search
+    fetchProvider: http
+
 - id: web-search-deepseek
   disabled: true
