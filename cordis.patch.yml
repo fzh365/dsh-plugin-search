@@ -4,9 +4,7 @@
 #   dsh plugin --profile web add <this>
 #
 # Search backend is chosen on this plugin's settings card:
-#   model  → native search markers on the model request (Chat Completions
-#            web_search_options + tools type web_search; Responses web_search;
-#            Anthropic web_search_20250305; Gemini googleSearch);
+#   model  → Chat Completions web_search_options;
 #            ready()=false so DSH withholds the local web_search function tool
 #   tavily → web_search function tool, Tavily then Bing
 #

@@ -18,7 +18,7 @@ dsh plugin --profile desktop add <path-to-this-repo>
 
 | 字段 | 说明 |
 |---|---|
-| 搜索后端 | `模型端搜索`：给模型请求加上原生搜索标记，隐藏本机 `web_search` 函数工具。Chat Completions 同时写 `web_search_options: {}` 和 `tools.type=web_search`；Responses 写 `web_search`；Anthropic Messages 写 `web_search_20250305`；Gemini 写 `googleSearch`。`Tavily + Bing`：模型调用本机 `web_search`，先 Tavily 再 Bing。 |
+| 搜索后端 | `模型端搜索`：给 Chat Completions 加上 `web_search_options: {}`，隐藏本机 `web_search` 函数工具。`Tavily + Bing`：模型调用本机 `web_search`，先 Tavily 再 Bing。 |
 | Tavily API key | 仅 Tavily + Bing 模式使用。有 key 走账号；留空走 keyless。也会读取 `TAVILY_API_KEY`。 |
 
 默认 pin：

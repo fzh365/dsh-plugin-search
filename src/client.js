@@ -10,8 +10,6 @@ window.__ModuleLoader__.load({
     const inject = ["slots", "locale", "configForms"];
     const NS = "dsh-plugin-search";
     const SETTINGS_ENTRY_ID = "dsh-plugin-search";
-    const PLUGIN_SEARCH = "simple-search";
-    const LOCAL_FETCH = "http";
 
     const en = {
       title: "Web search",
@@ -20,7 +18,7 @@ window.__ModuleLoader__.load({
       "mode.model": "Model API search",
       "mode.tavily": "Tavily + Bing",
       "mode.hint.model":
-        "Search runs on the model API (web_search / web_search_options). The local web_search function tool is hidden so the model does not search twice.",
+        "Search runs on the model API via Chat Completions web_search_options. The local web_search function tool is hidden so the model does not search twice.",
       "mode.hint.tavily":
         "The model calls web_search. Tavily runs first (API key, or keyless if empty), then Bing.",
       "key.label": "Tavily API key",
@@ -39,7 +37,7 @@ window.__ModuleLoader__.load({
       "mode.model": "模型端搜索",
       "mode.tavily": "Tavily + Bing",
       "mode.hint.model":
-        "由模型接口提供联网搜索（web_search / web_search_options）。本机 web_search 函数工具不交给模型，避免搜两次。",
+        "由模型接口提供联网搜索（Chat Completions 的 web_search_options）。本机 web_search 函数工具不交给模型，避免搜两次。",
       "mode.hint.tavily":
         "模型调用 web_search。先走 Tavily（有 key 用账号，留空则 keyless），失败再 Bing。",
       "key.label": "Tavily API key",
@@ -117,55 +115,21 @@ window.__ModuleLoader__.load({
       };
     }
 
-    function settingsForm(pluginScope, webScope) {
+    function settingsForm(pluginScope) {
       const plugin = new primitives.SettingsFormModel(pluginScope, [
         searchModeField(),
         tavilyKeyField(),
       ]);
-      const web =
-        webScope === undefined
-          ? undefined
-          : new primitives.SettingsFormModel(webScope, [
-              primitives.settingsTextField("searchProvider"),
-              primitives.settingsTextField("fetchProvider"),
-            ]);
-      if (web !== undefined) {
-        if (web.field("searchProvider").text !== PLUGIN_SEARCH) {
-          web.actions().edit("searchProvider", PLUGIN_SEARCH);
-        }
-        if (web.field("fetchProvider").text !== LOCAL_FETCH) {
-          web.actions().edit("fetchProvider", LOCAL_FETCH);
-        }
-      }
       const store = plugin.bind(() => {
-        const webShell = web?.shell();
         const pluginShell = plugin.shell();
         const modeText = plugin.field("searchMode").text;
         return {
           ...pluginShell,
-          dirty: pluginShell.dirty || Boolean(webShell?.dirty),
-          invalid: pluginShell.invalid || Boolean(webShell?.invalid),
-          saving: pluginShell.saving || Boolean(webShell?.saving),
-          failed: pluginShell.failed || Boolean(webShell?.failed),
-          writable: pluginShell.writable && (webShell === undefined || webShell.writable),
           searchMode: modeText === "tavily" ? "tavily" : "model",
           tavilyApiKey: plugin.field("tavilyApiKey").text ?? "",
         };
       });
-      const pluginActions = plugin.actions();
-      const actions = {
-        ...pluginActions,
-        async save() {
-          await pluginActions.save();
-          if (plugin.shell().failed) return;
-          if (web !== undefined && web.shell().dirty) await web.save();
-        },
-        discard() {
-          pluginActions.discard();
-          web?.actions().discard();
-        },
-      };
-      return { plugin, web, store, actions };
+      return { plugin, store, actions: plugin.actions() };
     }
 
     function SettingsCard(props) {
@@ -231,20 +195,8 @@ window.__ModuleLoader__.load({
         style.textContent = STYLE;
         document.head.appendChild(style);
         yield () => style.remove();
-        let webScope;
-        try {
-          webScope = ctx.configForms.get("web");
-        } catch {
-          webScope = undefined;
-        }
-        const { plugin, web, store, actions } = settingsForm(
-          ctx.configForms.get(SETTINGS_ENTRY_ID),
-          webScope,
-        );
-        ctx.effect(() => () => {
-          plugin.dispose();
-          web?.dispose();
-        }, "dsh-plugin-search settings form");
+        const { plugin, store, actions } = settingsForm(ctx.configForms.get(SETTINGS_ENTRY_ID));
+        ctx.effect(() => () => plugin.dispose(), "dsh-plugin-search settings form");
         yield ctx.slots.inject("plugins.bundle.config", () =>
           ctx.slots.register(
             {
