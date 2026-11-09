@@ -7,4 +7,3 @@ Thumbs.db
 .env
 .env.*
 !.env.example
-github.token
