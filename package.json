@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-search",
-  "version": "0.1.1",
-  "description": "Switch web_search and web_fetch between DeepSeek and this plugin. Works on desktop and web profiles.",
+  "version": "0.2.0",
+  "description": "Model API search or local Tavily then Bing. Works on desktop and web profiles.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -42,11 +42,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shinjiyu/dsh-plugin-search.git"
+    "url": "git+https://github.com/fzh365/dsh-plugin-search.git"
   },
-  "homepage": "https://github.com/shinjiyu/dsh-plugin-search",
+  "homepage": "https://github.com/fzh365/dsh-plugin-search",
   "bugs": {
-    "url": "https://github.com/shinjiyu/dsh-plugin-search/issues"
+    "url": "https://github.com/fzh365/dsh-plugin-search/issues"
   },
   "keywords": [
     "dsh-plugin",

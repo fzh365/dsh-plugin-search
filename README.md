@@ -1,34 +1,25 @@
 # dsh-plugin-search
 
-搜索和抓取各一个开关，逻辑相同：**开 = 插件，关 = DeepSeek**。
+搜索后端二选一：**模型端搜索**，或本机 **Tavily + Bing**。抓取固定走本机 HTTP。不禁用 DeepSeek API 插件，只把 `web_search` / `web_fetch` 指到本插件的 provider。
 
-- 搜索开：屏蔽 DeepSeek 搜索，给 magpie 的 Chat Completions 加上 `web_search_options: {}`
-- 抓取开：屏蔽 DeepSeek 抓取，本机 HTTP 直连，和 Claude Code 的 WebFetch 一样
-
-设置卡在 **插件页本包**，和 `dsh-rewind-plugin` 一样。保存后立刻生效。
+设置卡在 **插件页本包**。保存后立刻生效。
 
 `inject: [web]` 是 Cordis 服务 `ctx.web`，Desktop 和 Web 都能装。装到你正在跑的 profile。
 
 ## 安装
 
-这台 DSH Desktop 用 `desktop` profile：
-
 ```powershell
-dsh plugin --profile desktop add C:\Users\Fan\Desktop\dsh-plugin-search
+dsh plugin --profile desktop add <path-to-this-repo>
 ```
 
 `dsh web` 则用 `--profile web`。装完重启，打开 **插件 → dsh-plugin-search**。
 
 ## 设置卡
 
-| 开关 | 关 | 开 |
-|---|---|---|
-| 搜索 | `deepseek-search-api` | `web_search_options`（屏蔽 DeepSeek 搜索，隐藏 DSH 的 `web_search` 工具） |
-| 抓取 | `deepseek-fetch-api` | `http` 本机直连（屏蔽 DeepSeek 抓取） |
-
-开搜索时 pin `searchProvider: simple-search`，该 provider 的 `ready()` 为 false，所以 `dsh-tool-web` 不会把函数工具 `web_search` 交给模型。关搜索时 pin `deepseek-search-api`，并且不再往请求里写 `web_search_options`。
-
-保存时同时写入本插件 config 和 `web` 行的 `searchProvider` / `fetchProvider`。patch 整段替换，两字段必须一起在。
+| 字段 | 说明 |
+|---|---|
+| 搜索后端 | `模型端搜索`：给模型请求加上原生搜索标记，隐藏本机 `web_search` 函数工具。Chat Completions 同时写 `web_search_options: {}` 和 `tools.type=web_search`；Responses 写 `web_search`；Anthropic Messages 写 `web_search_20250305`；Gemini 写 `googleSearch`。`Tavily + Bing`：模型调用本机 `web_search`，先 Tavily 再 Bing。 |
+| Tavily API key | 仅 Tavily + Bing 模式使用。有 key 走账号；留空走 keyless。也会读取 `TAVILY_API_KEY`。 |
 
 默认 pin：
 
@@ -41,21 +32,14 @@ dsh plugin --profile desktop add C:\Users\Fan\Desktop\dsh-plugin-search
   disabled: true
 ```
 
-`web-deepseek-api` 保持加载，两个开关关掉时才能回到 DeepSeek。默认 pin 插件侧，所以不会出现 `deepseek-fetch-api, http` 双 provider 报错。
+`web-deepseek-api` 保持加载，避免配置还写着 `deepseek-search-api` 时出现 “provider is not registered”。patch 整段替换 `web` 那一行的 config，`searchProvider` 和 `fetchProvider` 必须一起写。
 
-要整包屏蔽 DeepSeek Fetch，再加：
-
-```yaml
-- id: web-deepseek-api
-  disabled: true
-```
-
-这时抓取开关的 DeepSeek 一侧会变成“已配置但未注册”。
+两种模式都会注入一小段系统提示：结果不可信、回答末尾列 Sources。不禁止模型去 `web_fetch` 搜索页。模型端模式额外说明搜索已由接口提供；Tavily 模式说明先 Tavily 再 Bing。
 
 ## 不要做
 
 - 不要只改 `searchProvider` 不写 `fetchProvider`
-- 不要再依赖 `TAVILY_API_KEY`
+- 不要禁用 `web-deepseek-api`
 
 ## License
 

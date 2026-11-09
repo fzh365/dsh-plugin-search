@@ -78,27 +78,6 @@ function pushSource(sources: SearchSource[], url: string, title?: string, snippe
   sources.push(source);
 }
 
-export function parseDuckDuckGoHtml(html: string): SearchSource[] {
-  const sources: SearchSource[] = [];
-  const re =
-    /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(html))) {
-    const url = unwrapRedirect(decodeHtml(match[1] ?? ""), "https://html.duckduckgo.com/html/");
-    const title = decodeHtml(match[2] ?? "");
-    pushSource(sources, url, title);
-  }
-  const snippetRe =
-    /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-  while ((match = snippetRe.exec(html))) {
-    const url = unwrapRedirect(decodeHtml(match[1] ?? ""), "https://html.duckduckgo.com/html/");
-    const snippet = decodeHtml(match[2] ?? "");
-    const existing = sources.find((s) => s.url === url);
-    if (existing && snippet) existing.snippet = snippet;
-  }
-  return sources;
-}
-
 export function parseBingHtml(html: string): SearchSource[] {
   const sources: SearchSource[] = [];
   const blocks = html.split(/<li[^>]*class="[^"]*\bb_algo\b[^"]*"/i).slice(1);
@@ -125,11 +104,6 @@ async function fetchHtml(url: string, signal?: AbortSignal): Promise<string> {
   return response.text();
 }
 
-async function searchDuckDuckGo(query: string, signal?: AbortSignal): Promise<SearchSource[]> {
-  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-  return parseDuckDuckGoHtml(await fetchHtml(url, signal));
-}
-
 async function searchBing(query: string, signal?: AbortSignal): Promise<SearchSource[]> {
   const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
   return parseBingHtml(await fetchHtml(url, signal));
@@ -137,14 +111,7 @@ async function searchBing(query: string, signal?: AbortSignal): Promise<SearchSo
 
 export async function localSearch(request: LocalSearchRequest): Promise<SearchResult> {
   const maxResults = request.maxResults ?? 5;
-  const errors: string[] = [];
-  for (const engine of [searchDuckDuckGo, searchBing] as const) {
-    try {
-      const sources = (await engine(request.query, request.signal)).slice(0, maxResults);
-      if (sources.length > 0) return { sources, truncated: false };
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
-    }
-  }
-  throw new Error(`local search failed: ${errors.join("; ") || "no results"}`);
+  const sources = (await searchBing(request.query, request.signal)).slice(0, maxResults);
+  if (sources.length > 0) return { sources, truncated: false };
+  throw new Error("bing search failed: no results");
 }

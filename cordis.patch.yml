@@ -3,15 +3,16 @@
 #   dsh plugin --profile desktop add <this>
 #   dsh plugin --profile web add <this>
 #
-# Search switch on the plugin settings card:
-#   ON  searchBackend: plugin   → OpenAI web_search_options; pin simple-search
-#       with ready()=false so DSH withholds web_search and DeepSeek search is unused
-#   OFF searchBackend: deepseek → searchProvider deepseek-search-api
-# Fetch switch is the same shape, independent of search:
-#   ON  fetchBackend: plugin   → fetchProvider http (Claude Code WebFetch)
-#   OFF fetchBackend: deepseek → fetchProvider deepseek-fetch-api
+# Search backend is chosen on this plugin's settings card:
+#   model  → native search markers on the model request (Chat Completions
+#            web_search_options + tools type web_search; Responses web_search;
+#            Anthropic web_search_20250305; Gemini googleSearch);
+#            ready()=false so DSH withholds the local web_search function tool
+#   tavily → web_search function tool, Tavily then Bing
 #
-# web-deepseek-api stays loaded so DeepSeek search/fetch remain selectable.
+# Fetch is always local HTTP.
+# web-deepseek-api stays loaded so DeepSeek providers remain registered.
+# Only the tools are retargeted (searchProvider / fetchProvider).
 # web-search-deepseek (Messages search) is off.
 
 - insert:
@@ -19,8 +20,8 @@
       name: dsh-plugin-search
       inject: [web]
       config:
-        searchBackend: plugin
-        fetchBackend: plugin
+        searchMode: model
+        tavilyApiKey: ""
 
 - id: web
   config:

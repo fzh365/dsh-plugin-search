@@ -1,44 +1,59 @@
 export const PROVIDER_ID = "simple-search";
-export const DEEPSEEK_SEARCH = "deepseek-search-api";
 
-export type SearchBackend = "plugin" | "deepseek";
-export type FetchBackend = "plugin" | "deepseek";
-export type Backend = SearchBackend | FetchBackend;
+export type SearchMode = "model" | "tavily";
 
 export interface ConfigShape {
-  searchBackend?: string;
-  fetchBackend?: string;
+  searchMode?: unknown;
+  tavilyApiKey?: unknown;
 }
 
-export function normalizeSearchBackend(value: string | undefined): SearchBackend {
-  return value === "deepseek" ? "deepseek" : "plugin";
+interface VolatileField {
+  get(): unknown;
 }
 
-export function normalizeFetchBackend(value: string | undefined): FetchBackend {
-  return value === "deepseek" ? "deepseek" : "plugin";
+export function readString(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (value !== null && typeof value === "object" && "get" in value) {
+    const got = (value as VolatileField).get();
+    return typeof got === "string" ? got : undefined;
+  }
+  return undefined;
 }
 
-export function normalizeConfig(config: ConfigShape = {}): {
-  searchBackend: SearchBackend;
-  fetchBackend: FetchBackend;
-} {
-  return {
-    searchBackend: normalizeSearchBackend(config.searchBackend),
-    fetchBackend: normalizeFetchBackend(config.fetchBackend),
-  };
+export function normalizeSearchMode(value: string | undefined): SearchMode {
+  return value === "tavily" ? "tavily" : "model";
 }
 
-export function providerPins(config: ConfigShape = {}): {
+export function searchModeOf(config: ConfigShape = {}): SearchMode {
+  return normalizeSearchMode(readString(config.searchMode));
+}
+
+export function isModelSearch(config: ConfigShape = {}): boolean {
+  return searchModeOf(config) === "model";
+}
+
+/** dsh-tool-web admits web_search only when this is true. */
+export function toolSearchReady(config: ConfigShape = {}): boolean {
+  return !isModelSearch(config);
+}
+
+export function resolveTavilyApiKey(
+  config: ConfigShape = {},
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const configured = readString(config.tavilyApiKey)?.trim();
+  if (configured) return configured;
+  const fromEnv = env.TAVILY_API_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  return undefined;
+}
+
+export function providerPins(): {
   searchProvider: string;
   fetchProvider: string;
 } {
-  const normalized = normalizeConfig(config);
   return {
-    searchProvider: normalized.searchBackend === "deepseek" ? DEEPSEEK_SEARCH : PROVIDER_ID,
-    fetchProvider: normalized.fetchBackend === "deepseek" ? "deepseek-fetch-api" : "http",
+    searchProvider: PROVIDER_ID,
+    fetchProvider: "http",
   };
-}
-
-export function backendFromFetchProvider(id: string | undefined): FetchBackend {
-  return id === "deepseek-fetch-api" ? "deepseek" : "plugin";
 }

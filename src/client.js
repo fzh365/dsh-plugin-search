@@ -11,23 +11,21 @@ window.__ModuleLoader__.load({
     const NS = "dsh-plugin-search";
     const SETTINGS_ENTRY_ID = "dsh-plugin-search";
     const PLUGIN_SEARCH = "simple-search";
-    const DEEPSEEK_SEARCH = "deepseek-search-api";
     const LOCAL_FETCH = "http";
-    const DEEPSEEK_FETCH = "deepseek-fetch-api";
 
     const en = {
-      title: "Web search & fetch",
-      description: "On: this plugin. Off: DeepSeek. Search and fetch are independent.",
-      "search.label": "Search",
-      "search.plugin": "Plugin (web_search_options)",
-      "search.deepseek": "DeepSeek Search API",
-      "search.hint.plugin": "Blocks DeepSeek search. Adds OpenAI web_search_options.",
-      "search.hint.deepseek": "Uses DeepSeek Search API.",
-      "fetch.label": "Fetch",
-      "fetch.plugin": "Plugin (local HTTP)",
-      "fetch.deepseek": "DeepSeek Fetch API",
-      "fetch.hint.plugin": "Blocks DeepSeek fetch. The host fetches the URL, same as Claude Code WebFetch.",
-      "fetch.hint.deepseek": "Uses DeepSeek Fetch API.",
+      title: "Web search",
+      description: "Model API search, or local Tavily then Bing.",
+      "mode.label": "Search backend",
+      "mode.model": "Model API search",
+      "mode.tavily": "Tavily + Bing",
+      "mode.hint.model":
+        "Search runs on the model API (web_search / web_search_options). The local web_search function tool is hidden so the model does not search twice.",
+      "mode.hint.tavily":
+        "The model calls web_search. Tavily runs first (API key, or keyless if empty), then Bing.",
+      "key.label": "Tavily API key",
+      "key.placeholder": "Optional. Empty uses Tavily keyless.",
+      "key.hint": "Used only in Tavily + Bing mode. Also reads TAVILY_API_KEY.",
       unavailable: "This plugin is not loaded, so it cannot be configured right now.",
       readOnly: "This deployment stores settings read-only.",
       saveFailed: "The deployment did not accept these values; they were left for you to correct.",
@@ -35,18 +33,18 @@ window.__ModuleLoader__.load({
       saving: "Saving…",
     };
     const zh = {
-      title: "网页搜索与抓取",
-      description: "开 = 插件，关 = DeepSeek。搜索和抓取各自独立。",
-      "search.label": "搜索",
-      "search.plugin": "插件（web_search_options）",
-      "search.deepseek": "DeepSeek Search API",
-      "search.hint.plugin": "屏蔽 DeepSeek 搜索。请求带 OpenAI web_search_options。",
-      "search.hint.deepseek": "使用 DeepSeek Search API。",
-      "fetch.label": "抓取",
-      "fetch.plugin": "插件（本机 HTTP）",
-      "fetch.deepseek": "DeepSeek Fetch API",
-      "fetch.hint.plugin": "屏蔽 DeepSeek 抓取。和 Claude Code 的 WebFetch 一样，由本机直接拉页面。",
-      "fetch.hint.deepseek": "使用 DeepSeek Fetch API。",
+      title: "网页搜索",
+      description: "模型端搜索，或本机 Tavily + Bing。",
+      "mode.label": "搜索后端",
+      "mode.model": "模型端搜索",
+      "mode.tavily": "Tavily + Bing",
+      "mode.hint.model":
+        "由模型接口提供联网搜索（web_search / web_search_options）。本机 web_search 函数工具不交给模型，避免搜两次。",
+      "mode.hint.tavily":
+        "模型调用 web_search。先走 Tavily（有 key 用账号，留空则 keyless），失败再 Bing。",
+      "key.label": "Tavily API key",
+      "key.placeholder": "可选。留空则走 Tavily keyless。",
+      "key.hint": "仅 Tavily + Bing 模式使用。也会读取环境变量 TAVILY_API_KEY。",
       unavailable: "该插件当前未加载，暂时无法配置。",
       readOnly: "本部署的设置为只读。",
       saveFailed: "本部署没有接受这些值，已保留供你修改。",
@@ -60,18 +58,27 @@ window.__ModuleLoader__.load({
   gap: 6px;
   padding: 12px 0;
 }
-.dsh-plugin-search-toggle-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+.dsh-plugin-search-label {
   font-size: 13px;
   line-height: 1.5;
   color: var(--dsw-alias-label-primary);
 }
-.dsh-plugin-search-toggle-label {
-  flex: 1;
-  min-width: 0;
+.dsh-plugin-search-select,
+.dsh-plugin-search-input {
+  width: 100%;
+  max-width: 360px;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-primary, transparent);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+}
+.dsh-plugin-search-select:disabled,
+.dsh-plugin-search-input:disabled {
+  opacity: 0.6;
 }
 .dsh-plugin-search-hint {
   margin: 0;
@@ -94,26 +101,26 @@ window.__ModuleLoader__.load({
       };
     }
 
-    function searchField() {
+    function searchModeField() {
       return {
-        field: "searchBackend",
-        format: (value) => (value === "deepseek" ? "deepseek" : "plugin"),
-        parse: (text) => ({ kind: "set", value: text === "deepseek" ? "deepseek" : "plugin" }),
+        field: "searchMode",
+        format: (value) => (value === "tavily" ? "tavily" : "model"),
+        parse: (text) => ({ kind: "set", value: text === "tavily" ? "tavily" : "model" }),
       };
     }
 
-    function fetchField() {
+    function tavilyKeyField() {
       return {
-        field: "fetchBackend",
-        format: (value) => (value === "deepseek" ? "deepseek" : "plugin"),
-        parse: (text) => ({ kind: "set", value: text === "deepseek" ? "deepseek" : "plugin" }),
+        field: "tavilyApiKey",
+        format: (value) => (typeof value === "string" ? value : ""),
+        parse: (text) => ({ kind: "set", value: typeof text === "string" ? text : "" }),
       };
     }
 
     function settingsForm(pluginScope, webScope) {
       const plugin = new primitives.SettingsFormModel(pluginScope, [
-        searchField(),
-        fetchField(),
+        searchModeField(),
+        tavilyKeyField(),
       ]);
       const web =
         webScope === undefined
@@ -122,24 +129,18 @@ window.__ModuleLoader__.load({
               primitives.settingsTextField("searchProvider"),
               primitives.settingsTextField("fetchProvider"),
             ]);
-      const isPlugin = (text) => text !== "deepseek";
-      const searchProviderOf = (pluginOn) => (pluginOn ? PLUGIN_SEARCH : DEEPSEEK_SEARCH);
-      const fetchProviderOf = (pluginOn) => (pluginOn ? LOCAL_FETCH : DEEPSEEK_FETCH);
       if (web !== undefined) {
-        const searchOn = isPlugin(plugin.field("searchBackend").text);
-        const fetchOn = isPlugin(plugin.field("fetchBackend").text);
-        if (web.field("searchProvider").text !== searchProviderOf(searchOn)) {
-          web.actions().edit("searchProvider", searchProviderOf(searchOn));
+        if (web.field("searchProvider").text !== PLUGIN_SEARCH) {
+          web.actions().edit("searchProvider", PLUGIN_SEARCH);
         }
-        if (web.field("fetchProvider").text !== fetchProviderOf(fetchOn)) {
-          web.actions().edit("fetchProvider", fetchProviderOf(fetchOn));
+        if (web.field("fetchProvider").text !== LOCAL_FETCH) {
+          web.actions().edit("fetchProvider", LOCAL_FETCH);
         }
       }
       const store = plugin.bind(() => {
-        const searchPlugin = isPlugin(plugin.field("searchBackend").text);
-        const fetchPlugin = isPlugin(plugin.field("fetchBackend").text);
         const webShell = web?.shell();
         const pluginShell = plugin.shell();
+        const modeText = plugin.field("searchMode").text;
         return {
           ...pluginShell,
           dirty: pluginShell.dirty || Boolean(webShell?.dirty),
@@ -147,24 +148,13 @@ window.__ModuleLoader__.load({
           saving: pluginShell.saving || Boolean(webShell?.saving),
           failed: pluginShell.failed || Boolean(webShell?.failed),
           writable: pluginShell.writable && (webShell === undefined || webShell.writable),
-          searchPlugin,
-          fetchPlugin,
+          searchMode: modeText === "tavily" ? "tavily" : "model",
+          tavilyApiKey: plugin.field("tavilyApiKey").text ?? "",
         };
       });
       const pluginActions = plugin.actions();
       const actions = {
         ...pluginActions,
-        edit(field, text) {
-          pluginActions.edit(field, text);
-          if (web === undefined) return;
-          const webActions = web.actions();
-          if (field === "searchBackend") {
-            webActions.edit("searchProvider", searchProviderOf(isPlugin(text)));
-          }
-          if (field === "fetchBackend") {
-            webActions.edit("fetchProvider", fetchProviderOf(isPlugin(text)));
-          }
-        },
         async save() {
           await pluginActions.save();
           if (plugin.shell().failed) return;
@@ -192,23 +182,21 @@ window.__ModuleLoader__.load({
           jsxs("div", {
             className: "dsh-plugin-search-section",
             children: [
-              jsxs("div", {
-                className: "dsh-plugin-search-toggle-row",
+              jsx("span", { className: "dsh-plugin-search-label", children: t("mode.label") }),
+              jsxs("select", {
+                className: "dsh-plugin-search-select",
+                value: state.searchMode,
+                disabled,
+                "aria-label": t("mode.label"),
+                onChange: (event) => props.edit("searchMode", event.target.value),
                 children: [
-                  jsx("span", { className: "dsh-plugin-search-toggle-label", children: t("search.label") }),
-                  jsx(primitives.Switch, {
-                    checked: state.searchPlugin,
-                    label: t("search.label"),
-                    disabled,
-                    onChange: (next) => {
-                      props.edit("searchBackend", next ? "plugin" : "deepseek");
-                    },
-                  }),
+                  jsx("option", { value: "model", children: t("mode.model") }),
+                  jsx("option", { value: "tavily", children: t("mode.tavily") }),
                 ],
               }),
               jsx("p", {
                 className: "dsh-plugin-search-hint",
-                children: t(state.searchPlugin ? "search.hint.plugin" : "search.hint.deepseek"),
+                children: t(state.searchMode === "tavily" ? "mode.hint.tavily" : "mode.hint.model"),
               }),
             ],
           }),
@@ -216,24 +204,19 @@ window.__ModuleLoader__.load({
           jsxs("div", {
             className: "dsh-plugin-search-section",
             children: [
-              jsxs("div", {
-                className: "dsh-plugin-search-toggle-row",
-                children: [
-                  jsx("span", { className: "dsh-plugin-search-toggle-label", children: t("fetch.label") }),
-                  jsx(primitives.Switch, {
-                    checked: state.fetchPlugin,
-                    label: t("fetch.label"),
-                    disabled,
-                    onChange: (next) => {
-                      props.edit("fetchBackend", next ? "plugin" : "deepseek");
-                    },
-                  }),
-                ],
+              jsx("span", { className: "dsh-plugin-search-label", children: t("key.label") }),
+              jsx("input", {
+                className: "dsh-plugin-search-input",
+                type: "password",
+                autoComplete: "off",
+                spellCheck: false,
+                value: state.tavilyApiKey,
+                placeholder: t("key.placeholder"),
+                disabled,
+                "aria-label": t("key.label"),
+                onChange: (event) => props.edit("tavilyApiKey", event.target.value),
               }),
-              jsx("p", {
-                className: "dsh-plugin-search-hint",
-                children: t(state.fetchPlugin ? "fetch.hint.plugin" : "fetch.hint.deepseek"),
-              }),
+              jsx("p", { className: "dsh-plugin-search-hint", children: t("key.hint") }),
             ],
           }),
         ],
