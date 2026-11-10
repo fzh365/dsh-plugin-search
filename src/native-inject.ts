@@ -1,3 +1,5 @@
+export type RequestKind = "chat" | "responses" | "messages";
+
 export function requestUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") return input;
   if (input instanceof URL) return input.href;
@@ -5,12 +7,24 @@ export function requestUrl(input: RequestInfo | URL): string {
   return String(input);
 }
 
-export function isChatCompletionsUrl(url: string): boolean {
+function pathnameOf(url: string): string {
   try {
-    return /\/chat\/completions\/?$/.test(new URL(url).pathname);
+    return new URL(url, "http://localhost").pathname;
   } catch {
-    return /\/chat\/completions(\?|$)/.test(url);
+    return (url.split(/[?#]/)[0] ?? url).replace(/^https?:\/\/[^/]+/i, "");
   }
+}
+
+export function requestKind(url: string): RequestKind | undefined {
+  const path = pathnameOf(url);
+  if (/\/chat\/completions\/?$/.test(path)) return "chat";
+  if (/\/responses\/?$/.test(path)) return "responses";
+  if (/\/messages\/?$/.test(path)) return "messages";
+  return undefined;
+}
+
+export function isChatCompletionsUrl(url: string): boolean {
+  return requestKind(url) === "chat";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -18,12 +32,66 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function hasWebSearchOptions(obj: Record<string, unknown>): boolean {
-  const existing = obj.web_search_options;
-  return existing !== undefined && existing !== null && typeof existing === "object" && !Array.isArray(existing);
+  return obj.web_search_options !== undefined;
 }
 
-/** Adds OpenAI Chat Completions web_search_options so the model API can run server-side search. */
-export function injectNativeSearchBody(body: string): string {
+/** A server-side search tool, e.g. web_search, web_search_preview, web_search_20250305. */
+function hasWebSearchTool(tools: unknown[]): boolean {
+  return tools.some((tool) => isRecord(tool) && typeof tool.type === "string" && tool.type.startsWith("web_search"));
+}
+
+/**
+ * The local dsh web_search function tool, in any protocol's shape:
+ * Chat {type:"function", function:{name}}, Responses {type:"function", name}, Messages {name, input_schema}.
+ * dsh lists it only when this step searches locally (Tavily + Bing), so its presence means "do not inject".
+ */
+export function hasLocalWebSearchTool(tools: unknown[]): boolean {
+  return tools.some((tool) => {
+    if (!isRecord(tool)) return false;
+    if (typeof tool.type === "string" && tool.type.startsWith("web_search")) return false;
+    const fn = isRecord(tool.function) ? tool.function : undefined;
+    return tool.name === "web_search" || fn?.name === "web_search";
+  });
+}
+
+/** DeepSeek's own API answers a marked request with server_tool_use blocks dsh cannot read. */
+export function isForcedLocalUrl(url: string): boolean {
+  try {
+    return new URL(url, "http://localhost").hostname === "api.deepseek.com";
+  } catch {
+    return false;
+  }
+}
+
+function appendTool(obj: Record<string, unknown>, tool: Record<string, unknown>): boolean {
+  if (!Array.isArray(obj.tools) || hasWebSearchTool(obj.tools)) return false;
+  obj.tools.push(tool);
+  return true;
+}
+
+/**
+ * Marks a request for server-side search in the form magpie recognizes:
+ * Completions: top-level web_search_options. Responses / Messages: a tool whose type starts with web_search.
+ */
+export function injectNativeSearch(obj: Record<string, unknown>, kind: RequestKind): boolean {
+  // Only model requests: other APIs may also end in /messages or /responses.
+  if (typeof obj.model !== "string") return false;
+  // Only agent turns, which carry tools. Side requests such as session titles carry none.
+  if (!Array.isArray(obj.tools) || obj.tools.length === 0) return false;
+  // This step searches locally: the request itself says so, whatever other agents are doing.
+  if (hasLocalWebSearchTool(obj.tools)) return false;
+  // Already marked for server-side search in either form: do not mark twice.
+  if (hasWebSearchOptions(obj)) return false;
+  if (Array.isArray(obj.tools) && hasWebSearchTool(obj.tools)) return false;
+  if (kind === "chat") {
+    obj.web_search_options = {};
+    return true;
+  }
+  if (kind === "responses") return appendTool(obj, { type: "web_search" });
+  return appendTool(obj, { type: "web_search_20250305", name: "web_search" });
+}
+
+export function injectNativeSearchBody(body: string, kind: RequestKind = "chat"): string {
   let parsed: unknown;
   try {
     parsed = JSON.parse(body);
@@ -31,28 +99,44 @@ export function injectNativeSearchBody(body: string): string {
     return body;
   }
   if (!isRecord(parsed)) return body;
-  if (hasWebSearchOptions(parsed)) return body;
-  parsed.web_search_options = {};
+  if (!injectNativeSearch(parsed, kind)) return body;
   return JSON.stringify(parsed);
 }
 
-export function rewriteChatCompletionsInit(
+function withoutContentLength(headers: HeadersInit | undefined): HeadersInit | undefined {
+  if (headers === undefined) return undefined;
+  if (typeof Headers !== "undefined" && headers instanceof Headers) {
+    const next = new Headers(headers);
+    next.delete("content-length");
+    return next;
+  }
+  if (Array.isArray(headers)) return headers.filter(([key]) => key.toLowerCase() !== "content-length");
+  return Object.fromEntries(Object.entries(headers).filter(([key]) => key.toLowerCase() !== "content-length"));
+}
+
+export function rewriteModelSearchInit(
   url: string,
   init: RequestInit | undefined,
   enabled: boolean,
 ): RequestInit | undefined {
-  if (!enabled || init === undefined || !isChatCompletionsUrl(url)) return init;
+  if (!enabled || init === undefined) return init;
+  if (isForcedLocalUrl(url)) return init;
+  const kind = requestKind(url);
+  if (kind === undefined) return init;
   const body = init.body;
   if (typeof body !== "string") return init;
-  const next = injectNativeSearchBody(body);
+  const next = injectNativeSearchBody(body, kind);
   if (next === body) return init;
-  return { ...init, body: next };
+  return { ...init, body: next, headers: withoutContentLength(init.headers) };
 }
+
+/** Kept for existing callers; same behavior as rewriteModelSearchInit. */
+export const rewriteChatCompletionsInit = rewriteModelSearchInit;
 
 export function wrapFetch(original: typeof fetch, enabled: () => boolean): typeof fetch {
   return function patchedFetch(input: RequestInfo | URL, init?: RequestInit) {
     try {
-      init = rewriteChatCompletionsInit(requestUrl(input), init, enabled());
+      init = rewriteModelSearchInit(requestUrl(input), init, enabled());
     } catch {
       // leave the request unchanged
     }

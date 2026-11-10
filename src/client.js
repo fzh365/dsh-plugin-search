@@ -15,15 +15,17 @@ window.__ModuleLoader__.load({
       title: "Web search",
       description: "Model API search, or local Tavily then Bing.",
       "mode.label": "Search backend",
-      "mode.model": "Model API search",
-      "mode.tavily": "Tavily + Bing",
-      "mode.hint.model":
-        "Search runs on the model API via Chat Completions web_search_options. The local web_search function tool is hidden so the model does not search twice.",
-      "mode.hint.tavily":
-        "The model calls web_search. Tavily runs first (API key, or keyless if empty), then Bing.",
-      "key.label": "Tavily API key",
+      "mode.model": "Model native search",
+      "mode.tavily": "Tavily + Bing (external)",
+      "mode.hint.model": "Uses the model's own web search.",
+      "mode.hint.tavily": "Searches through a tool call. Tavily first, falling back to Bing on failure.",
+      "key.label": "Tavily API Key",
       "key.placeholder": "Optional. Empty uses Tavily keyless.",
-      "key.hint": "Used only in Tavily + Bing mode. Also reads TAVILY_API_KEY.",
+      "key.hint": "Also reads the TAVILY_API_KEY environment variable.",
+      "providers.label": "Native search blocklist",
+      "providers.placeholder": "e.g. provider_1,provider_2",
+      "providers.hint":
+        "Full provider route ids, separated by commas. Listed providers are forced to Tavily + Bing (deepseek-official is forced by default).",
       unavailable: "This plugin is not loaded, so it cannot be configured right now.",
       readOnly: "This deployment stores settings read-only.",
       saveFailed: "The deployment did not accept these values; they were left for you to correct.",
@@ -32,17 +34,19 @@ window.__ModuleLoader__.load({
     };
     const zh = {
       title: "网页搜索",
-      description: "模型端搜索，或本机 Tavily + Bing。",
+      description: "模型原生搜索，或 Tavily + Bing 外部检索。",
       "mode.label": "搜索后端",
-      "mode.model": "模型端搜索",
-      "mode.tavily": "Tavily + Bing",
-      "mode.hint.model":
-        "由模型接口提供联网搜索（Chat Completions 的 web_search_options）。本机 web_search 函数工具不交给模型，避免搜两次。",
-      "mode.hint.tavily":
-        "模型调用 web_search。先走 Tavily（有 key 用账号，留空则 keyless），失败再 Bing。",
-      "key.label": "Tavily API key",
+      "mode.model": "模型原生搜索",
+      "mode.tavily": "Tavily + Bing（外部检索）",
+      "mode.hint.model": "使用模型自带的联网能力。",
+      "mode.hint.tavily": "通过工具调用检索。优先使用 Tavily，失败时自动降级至 Bing。",
+      "key.label": "Tavily API Key",
       "key.placeholder": "可选。留空则走 Tavily keyless。",
-      "key.hint": "仅 Tavily + Bing 模式使用。也会读取环境变量 TAVILY_API_KEY。",
+      "key.hint": "支持读取环境变量 TAVILY_API_KEY。",
+      "providers.label": "模型原生搜索黑名单",
+      "providers.placeholder": "例如：provider_1,provider_2",
+      "providers.hint":
+        "填写 Provider 完整路由 ID，多个以英文逗号分隔。名单内的 Provider 将强制走 Tavily + Bing（deepseek-official 已默认强制）。",
       unavailable: "该插件当前未加载，暂时无法配置。",
       readOnly: "本部署的设置为只读。",
       saveFailed: "本部署没有接受这些值，已保留供你修改。",
@@ -115,9 +119,18 @@ window.__ModuleLoader__.load({
       };
     }
 
+    function tavilyProvidersField() {
+      return {
+        field: "tavilyProviders",
+        format: (value) => (typeof value === "string" ? value : ""),
+        parse: (text) => ({ kind: "set", value: typeof text === "string" ? text : "" }),
+      };
+    }
+
     function settingsForm(pluginScope) {
       const plugin = new primitives.SettingsFormModel(pluginScope, [
         searchModeField(),
+        tavilyProvidersField(),
         tavilyKeyField(),
       ]);
       const store = plugin.bind(() => {
@@ -126,6 +139,7 @@ window.__ModuleLoader__.load({
         return {
           ...pluginShell,
           searchMode: modeText === "tavily" ? "tavily" : "model",
+          tavilyProviders: plugin.field("tavilyProviders").text ?? "",
           tavilyApiKey: plugin.field("tavilyApiKey").text ?? "",
         };
       });
@@ -162,6 +176,25 @@ window.__ModuleLoader__.load({
                 className: "dsh-plugin-search-hint",
                 children: t(state.searchMode === "tavily" ? "mode.hint.tavily" : "mode.hint.model"),
               }),
+            ],
+          }),
+          jsx("div", { className: "dsh-plugin-search-divider" }),
+          jsxs("div", {
+            className: "dsh-plugin-search-section",
+            children: [
+              jsx("span", { className: "dsh-plugin-search-label", children: t("providers.label") }),
+              jsx("input", {
+                className: "dsh-plugin-search-input",
+                type: "text",
+                autoComplete: "off",
+                spellCheck: false,
+                value: state.tavilyProviders,
+                placeholder: t("providers.placeholder"),
+                disabled,
+                "aria-label": t("providers.label"),
+                onChange: (event) => props.edit("tavilyProviders", event.target.value),
+              }),
+              jsx("p", { className: "dsh-plugin-search-hint", children: t("providers.hint") }),
             ],
           }),
           jsx("div", { className: "dsh-plugin-search-divider" }),

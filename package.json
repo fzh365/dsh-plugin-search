@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-search",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Model API search or local Tavily then Bing. Works on desktop and web profiles.",
   "type": "module",
   "main": "./dist/index.js",

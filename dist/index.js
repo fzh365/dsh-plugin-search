@@ -3,7 +3,7 @@ import { wrapFetch } from "./native-inject.js";
 import { PROVIDER_ID, isModelSearch, resolveTavilyApiKey, searchModeOf, toolSearchReady, } from "./pins.js";
 import { PROMPT_SECTION, composeSearchPrompt } from "./prompt.js";
 import { pluginSearch } from "./search.js";
-export { PROVIDER_ID, isModelSearch, providerPins, resolveTavilyApiKey, searchModeOf, toolSearchReady, } from "./pins.js";
+export { PROVIDER_ID, isModelSearch, providerPins, resolveTavilyApiKey, searchModeOf, toolSearchReady, tavilyProvidersOf, usesLocalSearch, } from "./pins.js";
 export { composeSearchPrompt } from "./prompt.js";
 export { pluginSearch } from "./search.js";
 export const name = "dsh-plugin-search";
@@ -11,12 +11,15 @@ export const inject = ["web"];
 export const Config = z.object({
     searchMode: z.string().default("model").volatile(),
     tavilyApiKey: z.string().default("").volatile(),
+    tavilyProviders: z.string().default("").volatile(),
 });
 export function apply(ctx, config = {}) {
     ctx.web.registerSearchProvider({
         id: PROVIDER_ID,
         available: () => true,
-        ready: () => toolSearchReady(config),
+        // Per step: true lists the local web_search tool for this provider route.
+        // The fetch wrapper then sees that tool in the request and leaves it alone.
+        ready: (llmProvider) => toolSearchReady(config, llmProvider),
         search: (request, signal) => pluginSearch({
             query: request.query,
             maxResults: request.maxResults,
@@ -33,11 +36,10 @@ export function apply(ctx, config = {}) {
     }, "dsh-plugin-search model-side search inject");
     ctx.inject?.(["systemPrompt"], (child) => {
         child.effect?.(() => {
-            const text = composeSearchPrompt(searchModeOf(config));
             const dispose = child.systemPrompt?.section?.({
                 name: PROMPT_SECTION,
                 order: 500,
-                text,
+                text: () => composeSearchPrompt(searchModeOf(config)),
             });
             return () => {
                 if (typeof dispose === "function")

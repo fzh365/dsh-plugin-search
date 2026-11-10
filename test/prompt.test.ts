@@ -8,10 +8,11 @@ test("currentMonthYear is month plus year", () => {
   assert.equal(currentMonthYear(now), "November 2026");
 });
 
-test("model prompt does not expose a local tool and does not forbid SERP fetch", () => {
+test("model prompt tells the model to call a listed web_search tool", () => {
   const text = composeSearchPrompt("model", now);
   assert.match(text, /model API/i);
-  assert.match(text, /no local web_search tool/i);
+  assert.match(text, /web_search tool is listed, call it/i);
+  assert.equal(/no local web_search tool/i.test(text), false);
   assert.match(text, /web_fetch/);
   assert.match(text, /Sources/);
   assert.match(text, /November 2026/);

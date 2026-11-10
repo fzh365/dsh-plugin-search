@@ -18,6 +18,8 @@ export {
   resolveTavilyApiKey,
   searchModeOf,
   toolSearchReady,
+  tavilyProvidersOf,
+  usesLocalSearch,
 } from "./pins.js";
 export type { ConfigShape, SearchMode } from "./pins.js";
 export { composeSearchPrompt } from "./prompt.js";
@@ -29,6 +31,7 @@ export const inject = ["web"];
 export const Config = z.object({
   searchMode: z.string().default("model").volatile(),
   tavilyApiKey: z.string().default("").volatile(),
+  tavilyProviders: z.string().default("").volatile(),
 });
 
 interface WebSearchRequest {
@@ -40,7 +43,7 @@ interface WebRuntime {
   registerSearchProvider(provider: {
     id: string;
     available(): boolean;
-    ready?(): boolean | Promise<boolean>;
+    ready?(llmProvider?: string): boolean | Promise<boolean>;
     search(request: WebSearchRequest, signal?: AbortSignal): Promise<unknown>;
   }): unknown;
 }
@@ -53,7 +56,7 @@ interface SettingsChild {
 }
 
 interface SystemPromptRuntime {
-  section?(spec: { name: string; order?: number; text: string }): unknown;
+  section?(spec: { name: string; order?: number; text: string | (() => string) }): unknown;
 }
 
 interface SystemPromptChild {
@@ -72,7 +75,9 @@ export function apply(ctx: DshContext, config: ConfigShape = {}): void {
   ctx.web.registerSearchProvider({
     id: PROVIDER_ID,
     available: () => true,
-    ready: () => toolSearchReady(config),
+    // Per step: true lists the local web_search tool for this provider route.
+    // The fetch wrapper then sees that tool in the request and leaves it alone.
+    ready: (llmProvider) => toolSearchReady(config, llmProvider),
     search: (request, signal) =>
       pluginSearch({
         query: request.query,
@@ -90,11 +95,10 @@ export function apply(ctx: DshContext, config: ConfigShape = {}): void {
   }, "dsh-plugin-search model-side search inject");
   ctx.inject?.(["systemPrompt"], (child) => {
     child.effect?.(() => {
-      const text = composeSearchPrompt(searchModeOf(config));
       const dispose = child.systemPrompt?.section?.({
         name: PROMPT_SECTION,
         order: 500,
-        text,
+        text: () => composeSearchPrompt(searchModeOf(config)),
       });
       return () => {
         if (typeof dispose === "function") dispose();

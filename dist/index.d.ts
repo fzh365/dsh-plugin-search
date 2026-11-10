@@ -1,5 +1,5 @@
 import { type ConfigShape } from "./pins.js";
-export { PROVIDER_ID, isModelSearch, providerPins, resolveTavilyApiKey, searchModeOf, toolSearchReady, } from "./pins.js";
+export { PROVIDER_ID, isModelSearch, providerPins, resolveTavilyApiKey, searchModeOf, toolSearchReady, tavilyProvidersOf, usesLocalSearch, } from "./pins.js";
 export type { ConfigShape, SearchMode } from "./pins.js";
 export { composeSearchPrompt } from "./prompt.js";
 export { pluginSearch } from "./search.js";
@@ -14,7 +14,7 @@ interface WebRuntime {
     registerSearchProvider(provider: {
         id: string;
         available(): boolean;
-        ready?(): boolean | Promise<boolean>;
+        ready?(llmProvider?: string): boolean | Promise<boolean>;
         search(request: WebSearchRequest, signal?: AbortSignal): Promise<unknown>;
     }): unknown;
 }
@@ -30,7 +30,7 @@ interface SystemPromptRuntime {
     section?(spec: {
         name: string;
         order?: number;
-        text: string;
+        text: string | (() => string);
     }): unknown;
 }
 interface SystemPromptChild {

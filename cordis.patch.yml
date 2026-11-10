@@ -19,6 +19,7 @@
       inject: [web]
       config:
         searchMode: model
+        tavilyProviders: ""
         tavilyApiKey: ""
 
 - id: web
